@@ -1,0 +1,68 @@
+# CV Creation using LLMs - Execution Instructions
+# Capstone Project CS01
+
+# ============================================
+# PRE-REQUISITE (One-time only)
+# ============================================
+
+# 1. Python 3.8+ must be installed (standard on most systems)
+#    Verify: python --version
+
+# 2. Get a FREE HuggingFace access token (needed for Llama 3.2):
+#    a. Create account at:  https://huggingface.co/join
+#    b. Accept Llama license:  https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct
+#    c. Generate token at:  https://huggingface.co/settings/tokens
+#
+#    Note: Qwen 2.5 is ungated — no license acceptance needed.
+#
+# NOTE: Python packages (transformers, torch, etc.) are installed AUTOMATICALLY
+#       on first run. No manual pip install needed.
+
+# ============================================
+# RUNNING THE APPLICATION
+# ============================================
+
+# Interactive mode (recommended for first use):
+python main.py --hf-token YOUR_HF_TOKEN_HERE
+
+# With resume and job description files:
+python main.py --hf-token YOUR_TOKEN --resume resume.pdf --job job_description.txt
+
+# With custom output filename:
+python main.py --hf-token YOUR_TOKEN --resume resume.pdf --job job.txt --output my_cv
+
+# Alternative: Set token as environment variable (then no --hf-token flag needed):
+#   macOS/Linux:  export HF_TOKEN=YOUR_TOKEN_HERE
+#   Windows:      set HF_TOKEN=YOUR_TOKEN_HERE
+# Then simply run:
+python main.py
+
+# ============================================
+# WHAT HAPPENS AUTOMATICALLY ON FIRST RUN
+# ============================================
+
+# 1. Python packages are checked and installed if missing:
+#    transformers, torch, accelerate, pdfplumber, python-docx, fpdf2
+#
+# 2. LLM models are downloaded from HuggingFace (one-time, ~12 GB total):
+#    - Qwen/Qwen2.5-3B-Instruct  (~6 GB) - used for data extraction
+#    - meta-llama/Llama-3.2-3B-Instruct (~6 GB) - used for CV generation
+#    Subsequent runs load from local cache — no internet needed.
+#
+# 3. GPU is used automatically if available (CUDA or Apple Silicon MPS).
+#    Falls back to CPU if no GPU is detected (slower but functional).
+
+# ============================================
+# SUPPORTED INPUT FORMATS
+# ============================================
+
+# Resume input:     PDF, DOCX, TXT, or manual text entry at the prompt
+# Job description:  PDF, DOCX, TXT, or paste directly in the terminal
+
+# ============================================
+# OUTPUT FILES
+# ============================================
+
+# Generated CV is saved in two formats in the current directory:
+#   generated_cv.docx  (editable Word document)
+#   generated_cv.pdf   (ready-to-submit PDF)

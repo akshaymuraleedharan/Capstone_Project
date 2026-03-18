@@ -1,0 +1,36 @@
+# PDFs
+*.pdf
+
+# Report folder
+Report/
+
+# Test data folder
+test_data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environment
+venv/
+
+# Technical decisions
+TECHNICAL_DECISIONS.md
+PROJECT_STATE.md
+
+# Environment variables
+.env
+
+# Testing / Linting caches
+.pytest_cache/
+.mypy_cache/
+
+# macOS
+.DS_Store
