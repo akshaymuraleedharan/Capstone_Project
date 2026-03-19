@@ -1,6 +1,8 @@
 # CV Creation using LLMs - Execution Instructions
 # Capstone Project CS01
 
+python main.py --hf-token YOUR_HF_TOKEN_HERE
+
 # ============================================
 # PRE-REQUISITE (One-time only)
 # ============================================
