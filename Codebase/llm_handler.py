@@ -4,7 +4,7 @@ Handles model loading, inference calls, and response parsing for both
 Qwen 2.5 (extraction) and Llama 3.2 (generation) models.
 
 This module manages two distinct models:
-- Extraction model (Qwen 2.5 3B): For structured data extraction tasks (low temperature)
+- Extraction model (Qwen 2.5 1.5B): For structured data extraction tasks (low temperature)
 - Generation model (Llama 3.2 3B): For creative content generation tasks (moderate temperature)
 
 Models are loaded locally using HuggingFace Transformers — no external server required.
@@ -137,7 +137,7 @@ class LLMHandler:
         if self._extraction_pipeline is None:
             print(f"  Loading extraction model: {self.extraction_model_id}")
             self._extraction_pipeline = self._load_pipeline(self.extraction_model_id)
-            print(f"  [OK] Extraction model ready.")
+            print(f"  ✓ Extraction model ready.")
         return self._extraction_pipeline
 
     def _get_generation_pipeline(self):
@@ -151,7 +151,7 @@ class LLMHandler:
         if self._generation_pipeline is None:
             print(f"  Loading generation model: {self.generation_model_id}")
             self._generation_pipeline = self._load_pipeline(self.generation_model_id)
-            print(f"  [OK] Generation model ready.")
+            print(f"  ✓ Generation model ready.")
         return self._generation_pipeline
 
     def _unload_extraction(self):
@@ -292,7 +292,6 @@ class LLMHandler:
                 model_kwargs["torch_dtype"] = torch.float16
 
             # Load full pipeline — triggers model weights download if not cached
-            print(f"    - Loading model... (this may take a few minutes)", flush=True)
             pipeline_kwargs = dict(device=device, **token_kwargs)
             if model_kwargs:
                 pipeline_kwargs["model_kwargs"] = model_kwargs
@@ -415,13 +414,8 @@ class LLMHandler:
 
                     if generated and generated.strip():
                         elapsed = time.time() - inference_start
-                        print(f"    [OK] Done. ({elapsed:.1f}s)", flush=True)
+                        print(f"    ✓ Done. ({elapsed:.1f}s)", flush=True)
                         return generated.strip()
-
-                # Debug: log what we actually got back
-                print(f"    Warning: Model returned empty/whitespace response.", flush=True)
-                if outputs:
-                    print(f"    Raw output: {str(outputs[0])[:200]}", flush=True)
 
                 raise ValueError("Empty response received from model")
 

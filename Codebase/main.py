@@ -4,20 +4,18 @@ Capstone Project CS01.
 
 This script orchestrates the complete 5-step pipeline:
 1. Project Setup - Initialize LLMs and verify connectivity
-2. Resume Data Extraction - Parse input into structured JSON (Qwen 2.5 3B)
-3. Job Description Parsing - Extract requirements and keywords (Qwen 2.5 3B)
+2. Resume Data Extraction - Parse input into structured JSON (Qwen 2.5 1.5B)
+3. Job Description Parsing - Extract requirements and keywords (Qwen 2.5 1.5B)
 4. Resume Tailoring & Generation - Create ATS-optimized CV content (Llama 3.2 3B)
 5. User Review & Iterative Revision - Interactive editing and ATS feedback
 
 Models Used (via HuggingFace Transformers - platform agnostic, no server required):
-- Qwen 2.5 3B (Qwen/Qwen2.5-3B-Instruct): Extraction and analysis tasks
+- Qwen 2.5 1.5B (Qwen/Qwen2.5-1.5B-Instruct): Extraction and analysis tasks
 - Llama 3.2 3B (meta-llama/Llama-3.2-3B-Instruct): Content generation and rewriting tasks
 
 Usage:
     python main.py
     python main.py --hf-token YOUR_HF_TOKEN
-    python main.py --resume path/to/resume.pdf --job path/to/job.txt --hf-token YOUR_TOKEN
-    python main.py --resume resume.pdf --job job.txt --output my_cv
 """
 
 import argparse
@@ -44,10 +42,7 @@ def check_and_install_dependencies():
     req_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
 
     if not os.path.isfile(req_file):
-        print("  WARNING: requirements.txt not found. Skipping auto-install.")
         return
-
-    print("  Checking Python dependencies...")
 
     # Read required packages
     with open(req_file, "r") as f:
@@ -77,7 +72,6 @@ def check_and_install_dependencies():
             missing.append(pkg)
 
     if not missing:
-        print("  All dependencies are already installed.")
         return
 
     print(f"  Installing missing packages: {', '.join(missing)}")
@@ -1156,8 +1150,8 @@ def run_pipeline(hf_token=None):
 
     Steps:
     1. Initialize LLMs via HuggingFace Transformers (Qwen 2.5 + Llama 3.2)
-    2. Acquire and extract resume data (Qwen 2.5 3B)
-    3. Acquire and parse job description (Qwen 2.5 3B)
+    2. Acquire and extract resume data (Qwen 2.5 1.5B)
+    3. Acquire and parse job description (Qwen 2.5 1.5B)
     4. Generate tailored CV content (Llama 3.2 3B)
     5. Interactive revision loop and final output generation
 
@@ -1192,7 +1186,7 @@ def run_pipeline(hf_token=None):
         hf_token=hf_token
     )
     llm_handler.verify_connection()
-    print(f"  [OK] Step 1 completed.")
+    print(f"  ✓ Step 1 completed.")
 
     # Initialize all pipeline components
     input_parser = InputParser()
@@ -1217,7 +1211,7 @@ def run_pipeline(hf_token=None):
     # Extract structured data using Qwen 2.5
     step_start = time.time()
     resume_data = extractor.extract_from_text(raw_resume_text)
-    print(f"  [OK] Extraction completed. ({time.time() - step_start:.1f}s)")
+    print(f"  ✓ Extraction completed. ({time.time() - step_start:.1f}s)")
 
     # Let user verify extracted data
     resume_data = verify_extracted_data(extractor, resume_data)
@@ -1240,9 +1234,9 @@ def run_pipeline(hf_token=None):
         # Parse job description using Qwen 2.5
         step_start = time.time()
         job_data = job_parser.parse_job_description(raw_job_text)
-        print(f"  [OK] JD parsing completed. ({time.time() - step_start:.1f}s)")
+        print(f"  ✓ JD parsing completed. ({time.time() - step_start:.1f}s)")
         ats_keywords = job_parser.extract_ats_keywords(job_data)
-        print(f"  [OK] Extracted ATS keywords for CV tailoring.")
+        print(f"  ✓ Extracted ATS keywords for CV tailoring.")
 
     # =========================================================================
     # =========================================================================
@@ -1250,7 +1244,7 @@ def run_pipeline(hf_token=None):
     # =========================================================================
     step_start = time.time()
     resume_data = structured_interview_round(extractor, resume_data)
-    print(f"  [OK] Structured interview completed. ({time.time() - step_start:.1f}s)")
+    print(f"  ✓ Structured interview completed. ({time.time() - step_start:.1f}s)")
     # Refresh contact info in case interview updated it
     contact_info = extractor.get_contact_info(resume_data)
 
@@ -1261,7 +1255,7 @@ def run_pipeline(hf_token=None):
         print("\n  Analyzing your profile against the job requirements...")
         step_start = time.time()
         resume_data = follow_up_round(extractor, resume_data, job_data)
-        print(f"  [OK] JD follow-up round completed. ({time.time() - step_start:.1f}s)")
+        print(f"  ✓ JD follow-up round completed. ({time.time() - step_start:.1f}s)")
         contact_info = extractor.get_contact_info(resume_data)
 
     # =========================================================================
@@ -1274,7 +1268,7 @@ def run_pipeline(hf_token=None):
     # Generate tailored CV content using Llama 3.2
     step_start = time.time()
     cv_content = cv_generator.generate_full_cv(resume_data, job_data)
-    print(f"  [OK] Step 4 completed. ({time.time() - step_start:.1f}s)")
+    print(f"  ✓ Step 4 completed. ({time.time() - step_start:.1f}s)")
 
     # CV preview is available via option [1] in the revision loop
 
@@ -1284,7 +1278,6 @@ def run_pipeline(hf_token=None):
     print("\n  ┌─────────────────────────────────────────┐")
     print("  │  STEP 5 - Review and Revision           │")
     print("  └─────────────────────────────────────────┘")
-    print("  " + "-" * 40)
 
     # ATS Compatibility Scoring (if JD provided)
     ats_report = None
@@ -1293,7 +1286,7 @@ def run_pipeline(hf_token=None):
         ats_report = cv_generator.score_ats_compatibility(
             cv_content, job_data, contact_info
         )
-        print(f"  [OK] ATS scoring completed. ({time.time() - step_start:.1f}s)")
+        print(f"  ✓ ATS scoring completed. ({time.time() - step_start:.1f}s)")
 
     final_cv_content = revision_loop(
         cv_generator, cv_content, contact_info,
@@ -1349,7 +1342,7 @@ def run_pipeline(hf_token=None):
         docx_path = output_builder.build_docx(
             final_cv_content, contact_info, docx_filename
         )
-        print(f"  [OK] DOCX saved: {docx_path}")
+        print(f"  ✓ DOCX saved: {docx_path}")
         generated_files.append(docx_path)
 
     if format_choice in ("1", "3"):
@@ -1357,7 +1350,7 @@ def run_pipeline(hf_token=None):
         pdf_path = output_builder.build_pdf(
             final_cv_content, contact_info, pdf_filename
         )
-        print(f"  [OK] PDF saved:  {pdf_path}")
+        print(f"  ✓ PDF saved:  {pdf_path}")
         generated_files.append(pdf_path)
 
     # =========================================================================

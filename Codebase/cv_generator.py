@@ -162,7 +162,7 @@ class CVGenerator:
         cv_content["certifications"] = resume_data.get("certifications", [])
         cv_content["achievements"] = resume_data.get("achievements", [])
 
-        print("  [OK] CV content generated successfully.")
+        print("  ✓ CV content generated successfully.")
         return cv_content
 
     def generate_professional_summary(self, resume_data, job_data=None):
@@ -502,8 +502,8 @@ class CVGenerator:
         try:
             llm_report = clean_json_response(response)
             llm_suggestions = llm_report.get("suggestions", [])
-        except (ValueError, KeyError) as e:
-            print(f"    Warning: Could not parse LLM suggestions: {e}")
+        except (ValueError, KeyError):
+            pass
 
         # Build the combined report
         return {

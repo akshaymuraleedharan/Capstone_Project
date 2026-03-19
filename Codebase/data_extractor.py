@@ -1277,8 +1277,6 @@ class ResumeDataExtractor:
             list: List of dicts with 'section' and 'question' keys,
                   or empty list if generation fails
         """
-        print("\n  Analyzing your profile for gaps...")
-
         # Build a compact section summary instead of dumping full JSON
         sections_summary = self._build_sections_summary(resume_data)
 

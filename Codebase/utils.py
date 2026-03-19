@@ -648,7 +648,7 @@ def display_ats_report(ats_report):
 
     matched = ats_report.get("matched_keywords", [])
     if matched:
-        print(f"\n  [OK] Matched Keywords ({len(matched)}):")
+        print(f"\n  ✓ Matched Keywords ({len(matched)}):")
         print(f"    {', '.join(matched)}")
 
     missing = ats_report.get("missing_keywords", [])
