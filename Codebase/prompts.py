@@ -18,17 +18,77 @@ RESUME_EXTRACTION_PROMPT = """Extract ALL resume data into compact JSON. Do NOT 
 
 RULES:
 - Extract EVERY job, project, and certification — do NOT skip any.
+- "certifications" = ONLY formal credentials with an issuing body (e.g., AWS Certified, PMP, CPA). Do NOT put awards, ratings, rankings, or competition results here.
+- "achievements" = Awards, rankings, competition results, honors, hackathons, and other accomplishments.
+- CRITICAL: For EACH experience entry, extract ALL bullet points / responsibilities / achievements listed under it. Do NOT return empty achievements for any role that has bullets in the resume.
 - Keep achievement bullets SHORT (max 15 words each). Capture the key point only.
 - Keep descriptions to 1 short sentence max.
 - "languages" = SPOKEN languages (English, Hindi), NOT programming languages.
-- Do NOT invent LinkedIn, portfolio, or any URLs not in the resume.
+- Do NOT invent LinkedIn, GitHub, portfolio, or any URLs not in the resume.
 - "gpa" field: Copy the EXACT score with its original label from the resume. Examples: "CGPA: 8.6/10", "72%", "GPA: 3.8/4.0", "85 percentile". Do NOT convert between formats.
 
 Resume:
 {resume_text}
 
 Return ONLY valid JSON (no markdown, no explanation):
-{{"name":"","contact":{{"email":"","phone":"","location":"","linkedin":"","portfolio":""}},"professional_summary":"","years_experience":"","education":[{{"degree":"","institution":"","year":"","gpa":""}}],"experience":[{{"title":"","company":"","start_date":"","end_date":"","achievements":[]}}],"skills":{{"technical":[],"soft":[],"tools":[],"languages":[]}},"certifications":[{{"name":"","issuer":"","year":""}}],"projects":[{{"name":"","description":"","technologies":[]}}],"achievements":[]}}"""
+{{"name":"","contact":{{"email":"","phone":"","location":"","linkedin":"","github":"","portfolio":""}},"professional_summary":"","years_experience":"","education":[{{"degree":"","institution":"","year":"","gpa":""}}],"experience":[{{"title":"","company":"","start_date":"","end_date":"","achievements":[]}}],"skills":{{"technical":[],"soft":[],"tools":[],"languages":[]}},"certifications":[{{"name":"","issuer":"","year":""}}],"projects":[{{"name":"","description":"","technologies":[]}}],"achievements":[]}}"""
+
+
+# -----------------------------------------------------------------------------
+# MULTI-PASS EXTRACTION PROMPTS
+# The single RESUME_EXTRACTION_PROMPT above asks for ALL sections in one JSON
+# blob.  For long resumes the small Qwen 2.5 1.5B model runs out of output
+# tokens and silently produces truncated JSON — losing entire sections.
+#
+# To fix this, extraction is split into two focused passes:
+#   Pass 1 (RESUME_HEADER_PROMPT)     — everything EXCEPT work experience
+#   Pass 2 (RESUME_EXPERIENCE_PROMPT) — ONLY work experience
+#
+# Each pass receives the full resume text (so the model has context) but
+# outputs a much smaller JSON — comfortably fitting within the 2048 token
+# limit.  Results are merged in data_extractor.py.
+#
+# The original RESUME_EXTRACTION_PROMPT is kept as a single-pass fallback
+# in case both multi-pass attempts fail.
+# -----------------------------------------------------------------------------
+
+# Pass 1: Header data — personal info, education, skills, certifications,
+# projects, achievements, publications.  Explicitly excludes work experience
+# so the model doesn't waste output tokens on it.
+RESUME_HEADER_PROMPT = """Extract personal info, education, skills, certifications, projects, achievements, and publications from this resume into compact JSON. Do NOT extract work experience — that will be extracted separately. Use "" for missing strings, [] for missing lists. Do NOT invent data.
+
+RULES:
+- Extract EVERY education entry, certification, project, and achievement — do NOT skip any.
+- "certifications" = ONLY formal credentials with an issuing body (e.g., AWS Certified, PMP, CPA). Do NOT put awards, ratings, rankings, or competition results here.
+- "achievements" = Awards, rankings, competition results, honors, hackathons, and other accomplishments.
+- Keep descriptions to 1 short sentence max.
+- "languages" = SPOKEN languages (English, Hindi), NOT programming languages.
+- Do NOT invent LinkedIn, GitHub, portfolio, or any URLs not in the resume.
+- "gpa" field: Copy the EXACT score with its original label from the resume. Examples: "CGPA: 8.6/10", "72%", "GPA: 3.8/4.0". Do NOT convert between formats.
+
+Resume:
+{resume_text}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{{"name":"","contact":{{"email":"","phone":"","location":"","linkedin":"","github":"","portfolio":""}},"professional_summary":"","years_experience":"","education":[{{"degree":"","institution":"","year":"","gpa":""}}],"skills":{{"technical":[],"soft":[],"tools":[],"languages":[]}},"certifications":[{{"name":"","issuer":"","year":""}}],"projects":[{{"name":"","description":"","technologies":[]}}],"achievements":[],"publications":[]}}"""
+
+
+# Pass 2: Work experience only — job roles with titles, companies, dates,
+# and ALL achievement/responsibility bullet points.  The JSON template is
+# minimal so the model can spend its output tokens on the actual content.
+RESUME_EXPERIENCE_PROMPT = """Extract ONLY the work experience section from this resume into compact JSON. Do NOT extract personal info, education, skills, or other sections.
+
+RULES:
+- Extract EVERY job/role — do NOT skip any.
+- CRITICAL: For EACH role, extract ALL bullet points / responsibilities / achievements listed under it. Do NOT return empty achievements for any role that has bullets in the resume.
+- Keep achievement bullets SHORT (max 15 words each). Capture the key point only.
+- Include title, company, start_date, end_date, and achievements for each role.
+
+Resume:
+{resume_text}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{{"experience":[{{"title":"","company":"","start_date":"","end_date":"","achievements":[]}}]}}"""
 
 
 FOLLOW_UP_PROMPT_JD = """The candidate is applying for a specific role. Compare their resume against the job requirements and identify 3-5 gaps where additional information would strengthen their application.
@@ -45,7 +105,7 @@ CRITICAL RULES:
 - Keep questions short and specific.
 
 Return a JSON array:
-[{{"section":"skills","question":"The role requires Docker experience. Have you used Docker or any containerization tools?"}},{{"section":"experience","question":"The role involves REST API development. Have you built or consumed any APIs?"}}]
+[{{"section":"skills","question":"The role requires experience with budgeting. Have you managed budgets or financial planning?"}},{{"section":"experience","question":"The role involves stakeholder management. Have you worked directly with clients or senior leadership?"}}]
 
 Valid sections: "skills", "projects", "experience", "achievements", "professional_summary"
 Return ONLY the JSON array."""

@@ -360,11 +360,12 @@ def display_banner():
     """
     banner = """
 ╔══════════════════════════════════════════════════════════════╗
-║              CV CREATION USING LLMs                         ║
-║          Capstone Project - CS01                            ║
-║                                                             ║
-║   Qwen 2.5 (extraction) + Llama 3.2 (generation)            ║
-║   Powered by HuggingFace Transformers                       ║
+║                   CV CREATION USING LLMs                     ║
+║                  Capstone Project - CS01                     ║
+║                                                              ║
+║          Qwen2.5-1.5B-Instruct (extraction & analysis)       ║
+║                             +                                ║
+║            Llama-3.2-3B-Instruct (content generation)        ║
 ╚══════════════════════════════════════════════════════════════╝
     """
     print(banner)

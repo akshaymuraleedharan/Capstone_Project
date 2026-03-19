@@ -154,19 +154,35 @@ class OutputBuilder:
         name_run.font.name = "Calibri"
         name_para.space_after = Pt(2)
 
-        # --- Contact Line ---
-        contact_parts = []
-        for field in ["email", "phone", "location", "linkedin"]:
+        # --- Contact Lines (split into 2 rows to avoid overflow) ---
+        labels = {"email": "Email", "phone": "Phone", "location": "Location",
+                  "linkedin": "LinkedIn", "github": "GitHub"}
+        line1_fields = ["email", "phone", "location"]
+        line2_fields = ["linkedin", "github"]
+        line1_parts, line2_parts = [], []
+        for field in line1_fields:
             val = contact_info.get(field, "")
             if val and not self._is_placeholder(val):
-                contact_parts.append(val)
-        if contact_parts:
+                line1_parts.append(f"{labels[field]}: {val}")
+        for field in line2_fields:
+            val = contact_info.get(field, "")
+            if val and not self._is_placeholder(val):
+                line2_parts.append(f"{labels[field]}: {val}")
+        if line1_parts or line2_parts:
             contact_para = doc.add_paragraph()
             contact_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            contact_run = contact_para.add_run(" | ".join(contact_parts))
-            contact_run.font.size = Pt(9)
-            contact_run.font.name = "Calibri"
-            contact_run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+            if line1_parts:
+                run1 = contact_para.add_run(" | ".join(line1_parts))
+                run1.font.size = Pt(9)
+                run1.font.name = "Calibri"
+                run1.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+            if line1_parts and line2_parts:
+                contact_para.add_run("\n")
+            if line2_parts:
+                run2 = contact_para.add_run(" | ".join(line2_parts))
+                run2.font.size = Pt(9)
+                run2.font.name = "Calibri"
+                run2.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
             contact_para.space_after = Pt(4)
 
         # --- Horizontal Rule ---
@@ -234,18 +250,29 @@ class OutputBuilder:
         pdf.set_font("Helvetica", "B", 16)
         pdf.cell(0, 10, name.upper(), align="C", new_x="LMARGIN", new_y="NEXT")
 
-        # --- Contact Line ---
-        contact_parts = []
-        for field in ["email", "phone", "location", "linkedin"]:
+        # --- Contact Lines (split into 2 rows to avoid overflow) ---
+        labels = {"email": "Email", "phone": "Phone", "location": "Location",
+                  "linkedin": "LinkedIn", "github": "GitHub"}
+        line1_fields = ["email", "phone", "location"]
+        line2_fields = ["linkedin", "github"]
+        line1_parts, line2_parts = [], []
+        for field in line1_fields:
             val = contact_info.get(field, "")
             if val and not self._is_placeholder(val):
-                contact_parts.append(val)
-        if contact_parts:
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(0, 5, self._sanitize_pdf_text(" | ".join(contact_parts)),
+                line1_parts.append(f"{labels[field]}: {val}")
+        for field in line2_fields:
+            val = contact_info.get(field, "")
+            if val and not self._is_placeholder(val):
+                line2_parts.append(f"{labels[field]}: {val}")
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(100, 100, 100)
+        if line1_parts:
+            pdf.cell(0, 5, self._sanitize_pdf_text(" | ".join(line1_parts)),
                      align="C", new_x="LMARGIN", new_y="NEXT")
-            pdf.set_text_color(0, 0, 0)
+        if line2_parts:
+            pdf.cell(0, 5, self._sanitize_pdf_text(" | ".join(line2_parts)),
+                     align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
 
         # --- Horizontal Rule ---
         pdf.ln(3)

@@ -75,12 +75,18 @@ class InputParser:
             print("Please install it with: pip install pdfplumber")
             sys.exit(1)
 
-        with pdfplumber.open(file_path) as pdf:
-            pages_text = []
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    pages_text.append(text)
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                pages_text = []
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        pages_text.append(text)
+        except Exception as e:
+            # Corrupt, password-protected, or otherwise unreadable PDF
+            raise ValueError(
+                f"Could not read PDF '{file_path}': {e}"
+            ) from e
 
         result = "\n\n".join(pages_text).strip()
         if not result:
@@ -107,7 +113,13 @@ class InputParser:
             print("Please install it with: pip install python-docx")
             sys.exit(1)
 
-        doc = Document(file_path)
+        try:
+            doc = Document(file_path)
+        except Exception as e:
+            # Corrupt, password-protected, or otherwise unreadable DOCX
+            raise ValueError(
+                f"Could not read DOCX '{file_path}': {e}"
+            ) from e
         all_text = []
 
         # Extract paragraphs
@@ -224,15 +236,21 @@ class InputParser:
         print("\n  --- Education (press Enter on Degree to stop adding) ---")
         education_entries = []
         while True:
-            degree = input("  Degree (e.g., B.S. Computer Science): ").strip()
+            degree = input("  Degree (e.g., MBBS, B.E. Mechanical, MBA): ").strip()
             if not degree:
                 break
             institution = input("  Institution: ").strip()
             year = input("  Year of completion: ").strip()
-            gpa = input("  GPA (optional): ").strip()
+            gpa = input("  Score - CGPA, GPA, or Percentage (optional, e.g., 8.75/10, 3.8/4.0, 72%): ").strip()
             entry = f"{degree} - {institution} ({year})"
             if gpa:
-                entry += f" | GPA: {gpa}"
+                # Auto-detect the format from the input
+                if "%" in gpa or (gpa.replace(".", "").isdigit() and float(gpa) > 10):
+                    entry += f" | Score: {gpa}" if "%" in gpa else f" | Score: {gpa}%"
+                elif "/" in gpa:
+                    entry += f" | CGPA: {gpa}"
+                else:
+                    entry += f" | CGPA: {gpa}"
             education_entries.append(entry)
             print()
 
@@ -332,7 +350,7 @@ class InputParser:
         print("\n  --- Certifications (press Enter to skip) ---")
         certifications = []
         while True:
-            cert = input("  Certification (e.g., AWS Solutions Architect): ").strip()
+            cert = input("  Certification (e.g., PMP, CPA, Six Sigma): ").strip()
             if not cert:
                 break
             certifications.append(cert)
@@ -432,7 +450,7 @@ class InputParser:
 
         # ── Experience & Education ────────────────────────────────────
         experience = input("  Required Years of Experience (e.g., 3+, 5-7): ").strip()
-        education = input("  Education Requirement (e.g., BS in Computer Science): ").strip()
+        education = input("  Education Requirement (e.g., Bachelor's degree, MBA): ").strip()
 
         # ── Skills ────────────────────────────────────────────────────
         print("\n  --- Skills ---")
