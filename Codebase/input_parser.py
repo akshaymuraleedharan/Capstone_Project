@@ -52,7 +52,7 @@ class InputParser:
 
         if ext == ".pdf":
             return self.read_pdf(file_path)
-        elif ext in (".docx", ".doc"):
+        elif ext in (".docx", ".doc"):  # .doc is best-effort; python-docx may fail on legacy OLE format
             return self.read_docx(file_path)
         elif ext in (".txt", ".text"):
             return self.read_text_file(file_path)
@@ -88,6 +88,7 @@ class InputParser:
                 f"Could not read PDF '{file_path}': {e}"
             ) from e
 
+        # Double newline between pages preserves visual section breaks for LLM extraction
         result = "\n\n".join(pages_text).strip()
         if not result:
             print(f"  Warning: No text could be extracted from '{file_path}'.")
@@ -137,7 +138,7 @@ class InputParser:
                     for cell_text in row_data:
                         if cell_text not in seen:
                             seen.append(cell_text)
-                    all_text.append(" | ".join(seen))
+                    all_text.append(" | ".join(seen))  # pipe-delimited flat layout for LLM parsing
 
         result = "\n".join(all_text)
         if not result:
@@ -158,6 +159,7 @@ class InputParser:
         Raises:
             ValueError: If the file cannot be read with any supported encoding
         """
+        # Try progressively more permissive encodings; latin-1 accepts all bytes as last resort
         encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
         for encoding in encodings:
             try:
@@ -244,7 +246,7 @@ class InputParser:
             gpa = input("  Score - CGPA, GPA, or Percentage (optional, e.g., 8.75/10, 3.8/4.0, 72%): ").strip()
             entry = f"{degree} - {institution} ({year})"
             if gpa:
-                # Auto-detect the format from the input
+                # >10 = percentage (GPA/CGPA scales top out at 4.0 and 10.0)
                 if "%" in gpa or (gpa.replace(".", "").isdigit() and float(gpa) > 10):
                     entry += f" | Score: {gpa}" if "%" in gpa else f" | Score: {gpa}%"
                 elif "/" in gpa:

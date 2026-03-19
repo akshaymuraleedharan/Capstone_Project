@@ -73,7 +73,7 @@ class CVGenerator:
         # --- Prepare data for combined prompt ---
         name = resume_data.get("name", "the candidate")
 
-        # Experience (filtered for real entries)
+        # Experience (filtered — small models hallucinate placeholder entries like "N/A")
         experience = resume_data.get("experience", [])
         real_experience = [e for e in experience if self._is_real_experience(e)]
         experience_text = self._format_experience_for_prompt(real_experience) if real_experience else "No work experience."
@@ -97,7 +97,7 @@ class CVGenerator:
             for category_skills in skills.values():
                 if isinstance(category_skills, list):
                     all_skills.extend(category_skills)
-        key_skills = ", ".join(all_skills[:10]) if all_skills else "N/A"
+        key_skills = ", ".join(all_skills[:10]) if all_skills else "N/A"  # cap to stay within small-model context
 
         # Education
         education = resume_data.get("education", [])
@@ -201,7 +201,7 @@ class CVGenerator:
             for category_skills in skills.values():
                 if isinstance(category_skills, list):
                     all_skills.extend(category_skills)
-        key_skills = ", ".join(all_skills[:10]) if all_skills else "N/A"
+        key_skills = ", ".join(all_skills[:10]) if all_skills else "N/A"  # cap to stay within small-model context
 
         # Education summary
         education = resume_data.get("education", [])
@@ -357,7 +357,7 @@ class CVGenerator:
         missing = [kw for kw in all_keywords if kw not in cv_lower]
 
         if all_keywords:
-            # Required hits count 2×, preferred 1×
+            # Required hits weighted 2x: ATS systems penalize missing "must-haves" harder
             req_hits = sum(1 for kw in required if kw in cv_lower)
             pref_hits = sum(1 for kw in preferred if kw in cv_lower)
             weighted_hits = req_hits * 2 + pref_hits
@@ -397,7 +397,7 @@ class CVGenerator:
 
         bullets = [l.strip() for l in impact_text.split("\n")
                    if l.strip().startswith("-") or l.strip().startswith("•")]
-        total_bullets = max(len(bullets), 1)
+        total_bullets = max(len(bullets), 1)  # floor at 1 to avoid division-by-zero
 
         # Metric check: numbers, %, $ in bullet
         metric_count = sum(1 for b in bullets if re.search(r'\d+[\.\d]*\s*[%$]|\$\s*\d|[\d,]+\s*(users|clients|customers|team|months|years)', b.lower()))
@@ -420,6 +420,7 @@ class CVGenerator:
 
         metric_pct = metric_count / total_bullets
         verb_pct = verb_count / total_bullets
+        # Equal weight: metrics prove results, action verbs prove ownership
         impact_score = round(((metric_pct * 0.5) + (verb_pct * 0.5)) * 25)
 
         # ---- 4. Role Alignment (0-25) ----
@@ -431,21 +432,21 @@ class CVGenerator:
 
         # Check job title words appear in experience
         if job_title:
-            title_words = [w for w in job_title.split() if len(w) > 2]
+            title_words = [w for w in job_title.split() if len(w) > 2]  # skip stop-words
             alignment_total += len(title_words)
             alignment_hits += sum(1 for w in title_words if w in cv_lower)
 
         # Check responsibilities keywords appear in CV
         if responsibilities:
-            for resp in responsibilities[:10]:  # cap at 10
-                key_words = [w for w in resp.split() if len(w) > 3][:3]
+            for resp in responsibilities[:10]:  # cap to keep scoring fast and avoid filler noise
+                key_words = [w for w in resp.split() if len(w) > 3][:3]  # top 3 content words per resp
                 alignment_total += len(key_words)
                 alignment_hits += sum(1 for w in key_words if w in cv_lower)
 
         if alignment_total:
             role_score = round((alignment_hits / alignment_total) * 25)
         else:
-            role_score = 12  # neutral when no JD responsibilities
+            role_score = 12  # 12/25 = midpoint; don't penalize when JD lacks responsibilities
 
         rubric_total = keyword_score + completeness_score + impact_score + role_score
 
@@ -751,7 +752,7 @@ class CVGenerator:
         if not real_entries:
             return "0"
 
-        # Simple heuristic: count number of roles as rough estimate
+        # Rough heuristic (~2 yrs/role avg); only used when user didn't provide years
         num_roles = len(real_entries)
         if num_roles >= 5:
             return "10+"

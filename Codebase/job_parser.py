@@ -69,6 +69,7 @@ class JobDescriptionParser:
         try:
             parsed_data = clean_json_response(response)
         except ValueError as e:
+            # Single retry: small models often produce valid JSON on second attempt
             print(f"  Warning: Could not parse job parsing response as JSON: {e}")
             print("  Retrying parsing...")
             response = self.llm.extract(prompt)

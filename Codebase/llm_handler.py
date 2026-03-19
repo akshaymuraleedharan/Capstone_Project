@@ -23,7 +23,7 @@ import os
 class LLMHandler:
     """
     Unified interface for interacting with HuggingFace Transformers LLMs.
-    Manages two model instances: one for extraction (Qwen 2.5 3B),
+    Manages two model instances: one for extraction (Qwen 2.5 1.5B),
     one for generation (Llama 3.2 3B).
 
     Models are downloaded once on first use and cached locally by HuggingFace.
@@ -40,7 +40,7 @@ class LLMHandler:
 
         Args:
             extraction_model (str): HuggingFace model ID for extraction tasks
-                                    (default: Qwen/Qwen2.5-3B-Instruct)
+                                    (default: Qwen/Qwen2.5-1.5B-Instruct)
             generation_model (str): HuggingFace model ID for generation tasks
                                     (default: meta-llama/Llama-3.2-3B-Instruct)
             hf_token (str or None): HuggingFace access token for gated models.
@@ -193,7 +193,7 @@ class LLMHandler:
         """
         Release unused GPU/MPS memory and trigger garbage collection.
         Helps prevent OOM errors when switching between models on
-        memory-constrained devices (e.g. MacBook with shared MPS memory).
+        memory-constrained devices (e.g. 8 GB unified memory).
         """
         import gc
         gc.collect()
@@ -210,10 +210,10 @@ class LLMHandler:
         """
         Load a HuggingFace text-generation pipeline for the given model ID.
         Automatically selects GPU (CUDA/MPS) if available, otherwise uses CPU.
-        Uses 4-bit quantization if bitsandbytes is available to reduce memory usage.
+        Uses half-precision (FP16/BF16) to reduce memory footprint by ~50%.
 
         Args:
-            model_id (str): HuggingFace model identifier (e.g., 'Qwen/Qwen2.5-3B-Instruct')
+            model_id (str): HuggingFace model identifier (e.g., 'Qwen/Qwen2.5-1.5B-Instruct')
 
         Returns:
             transformers.Pipeline: Loaded and ready text-generation pipeline
@@ -327,8 +327,7 @@ class LLMHandler:
             prompt (str): The prompt text to send to the model
             temperature (float): Sampling temperature for the model
             max_retries (int): Number of retry attempts before giving up
-            max_new_tokens (int): Maximum tokens to generate (default 2048,
-                                  extraction uses 4096 for long JSON outputs)
+            max_new_tokens (int): Maximum tokens to generate (default 2048)
 
         Returns:
             str: Generated text response (with the prompt removed)
@@ -351,8 +350,7 @@ class LLMHandler:
                 pipe = pipeline_getter()
 
                 # Show processing indicator — LLM inference can take 10-60s on CPU
-                prompt_len = len(prompt)
-                print(f"    ... Thinking (prompt: ~{prompt_len} chars)", flush=True)
+                print(f"    ... Thinking", flush=True)
                 inference_start = time.time()
 
                 # In transformers 5.x there are two sources of length limits that

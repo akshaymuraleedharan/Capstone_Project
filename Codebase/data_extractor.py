@@ -533,6 +533,7 @@ class ResumeDataExtractor:
             return str(item)
 
         def _normalize(text):
+            # Strip punctuation/spaces so "AWS Cert." matches "AWS Cert" for dedup
             return re.sub(r'[^a-z0-9]', '', text.lower())
 
         # Keep all certifications, track their normalized text
@@ -620,7 +621,7 @@ class ResumeDataExtractor:
                     location = match.group(1).strip().rstrip('|').strip()
                     # Stop at newline or pipe
                     location = location.split('\n')[0].strip()
-                    if location and len(location) < 100:
+                    if location and len(location) < 100:  # reject regex over-matches
                         contact["location"] = location
                         break
 
@@ -808,7 +809,7 @@ class ResumeDataExtractor:
             (r'\bphp\b', "PHP", "technical"),
             (r'\bswift\b', "Swift", "technical"),
             (r'\bkotlin\b', "Kotlin", "technical"),
-            (r'\br\b(?:\s+programming|\s+studio|\s+language)', "R", "technical"),
+            (r'\br\b(?:\s+programming|\s+studio|\s+language)', "R", "technical"),  # bare "r" too common; require context
             (r'\bsql\b', "SQL", "technical"),
             (r'\bhtml\b', "HTML", "technical"),
             (r'\bcss\b', "CSS", "technical"),
@@ -1008,6 +1009,7 @@ class ResumeDataExtractor:
             if isinstance(exp, dict):
                 t = (exp.get("title") or "").strip().lower()
                 c = (exp.get("company") or "").strip().lower()
+                # Skip 1-2 char titles to avoid false boundary matches
                 if t and len(t) > 2:
                     known_titles[t] = re.compile(
                         r'\b' + re.escape(t) + r'\b', re.IGNORECASE
@@ -1110,7 +1112,7 @@ class ResumeDataExtractor:
                     if not _is_anchor_candidate(line):
                         continue
                     if title in line.strip().lower():
-                        # Check if company appears within 3 lines
+                        # Asymmetric window: company usually follows title (+3 down, -2 up)
                         for k in range(max(0, i - 2), min(len(lines), i + 4)):
                             if company in lines[k].strip().lower():
                                 anchor_idx = i
@@ -1154,7 +1156,7 @@ class ResumeDataExtractor:
                 # Blank line handling
                 if not stripped:
                     consecutive_blanks += 1
-                    if consecutive_blanks >= 2:
+                    if consecutive_blanks >= 2:  # double blank = section break in most resumes
                         break
                     if bullets:
                         # Peek ahead: if next non-blank line is a bullet, keep going
@@ -1180,7 +1182,7 @@ class ResumeDataExtractor:
                 # Still in header mode — skip metadata lines
                 if header_skipping:
                     if (_DATE_LINE_RE.search(stripped)
-                            or len(stripped) < 60
+                            or len(stripped) < 60  # short non-bullet lines are likely metadata
                             or stripped.lower().startswith("technologies")
                             or stripped.lower().startswith("duration")
                             or stripped.lower().startswith("work done")
@@ -1369,7 +1371,7 @@ class ResumeDataExtractor:
 
         # Professional summary
         summary = resume_data.get("professional_summary", "")
-        if summary and len(summary) > 20:
+        if summary and len(summary) > 20:  # <20 chars is too thin to be a real summary
             parts.append(f"professional_summary: present ({len(summary)} chars)")
         else:
             parts.append("professional_summary: empty or thin")
@@ -1419,7 +1421,7 @@ class ResumeDataExtractor:
 
         # 1. Professional summary — if missing or very thin
         summary = resume_data.get("professional_summary", "")
-        if not summary or len(summary.strip()) < 30:
+        if not summary or len(summary.strip()) < 30:  # placeholder or single phrase
             questions.append({
                 "section": "professional_summary",
                 "question": ("How would you describe your professional identity "
@@ -1431,7 +1433,7 @@ class ResumeDataExtractor:
         experience = resume_data.get("experience", [])
         enrich_count = 0
         for i, exp in enumerate(experience):
-            if enrich_count >= 2:
+            if enrich_count >= 2:  # cap at 2 to avoid overwhelming user with questions
                 break
             if not isinstance(exp, dict):
                 continue
@@ -1606,6 +1608,7 @@ class ResumeDataExtractor:
             elif section == "projects":
                 projects = resume_data.get("projects", [])
                 projects.append({
+                    # Extract first clause as project name; 60-char cap fits PDF layout
                     "name": answer.split(".")[0].split(",")[0][:60],
                     "description": answer,
                     "technologies": []
@@ -1615,6 +1618,7 @@ class ResumeDataExtractor:
             elif section == "experience":
                 experience = resume_data.get("experience", [])
                 experience.append({
+                    # Parse "Role at Company" pattern; 40-char fallback avoids full sentences
                     "title": answer.split(" at ")[0] if " at " in answer else answer[:40],
                     "company": answer.split(" at ")[1].split(",")[0] if " at " in answer else "",
                     "start_date": "",
@@ -1672,6 +1676,7 @@ class ResumeDataExtractor:
                 if idx < len(experience) and isinstance(experience[idx], dict):
                     new_bullets = [
                         b.strip() for b in
+                        # Normalize semicolons so "Led team; Cut costs" splits into bullets
                         answer.replace(";", ",").split(",")
                         if b.strip()
                     ]

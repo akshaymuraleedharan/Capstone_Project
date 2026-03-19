@@ -108,7 +108,7 @@ class OutputBuilder:
         # Trailing dash after a year (e.g. "March 2021 -" meaning ongoing)
         if re.search(r'\d{4}\s*-\s*$', stripped):
             return True
-        # Contains a date anywhere and has pipes (broad fallback)
+        # 2+ pipes = minimum for "Title | Company | Date" triple
         if re.search(r'\b(19|20)\d{2}\b', stripped) and stripped.count("|") >= 2:
             return True
         return False
@@ -242,6 +242,7 @@ class OutputBuilder:
 
         pdf = FPDF()
         pdf.add_page()
+        # 15mm margins (~0.6in) for space-efficient ATS-friendly layout
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.set_margins(15, 15, 15)
 
@@ -303,7 +304,7 @@ class OutputBuilder:
             # Section heading
             heading_text = section_name.replace("_", " ").upper()
             pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(31, 73, 125)  # Dark blue
+            pdf.set_text_color(31, 73, 125)  # MS Word "Accent 1" blue — ATS-safe professional heading
             pdf.cell(0, 8, heading_text, new_x="LMARGIN", new_y="NEXT")
             pdf.set_text_color(0, 0, 0)
 
@@ -368,6 +369,7 @@ class OutputBuilder:
         pBdr = OxmlElement('w:pBdr')
         bottom = OxmlElement('w:bottom')
         bottom.set(qn('w:val'), 'single')
+        # OOXML border: sz in half-points (6 = 3pt line), space in points
         bottom.set(qn('w:sz'), '6')
         bottom.set(qn('w:space'), '1')
         bottom.set(qn('w:color'), '999999')
@@ -422,7 +424,7 @@ class OutputBuilder:
                 continue
             run = para.add_run(segment_text)
             run.bold = is_bold
-            run.font.size = Pt(10.5)
+            run.font.size = Pt(10.5)  # 10.5pt = resume sweet spot between density and readability
             run.font.name = "Calibri"
 
         return para
@@ -449,7 +451,7 @@ class OutputBuilder:
             # Skip placeholder lines (NONE, N/A, etc.)
             if self._is_placeholder(line):
                 continue
-            # Skip markdown horizontal rules (---, ***, ___)
+            # Skip markdown horizontal rules (---, ***, ___) — 3+ chars per MD spec
             if set(line) <= {'-', '*', '_'} and len(line) >= 3:
                 continue
             # Detect experience title lines (e.g. "Title | Company | Date")
@@ -473,6 +475,7 @@ class OutputBuilder:
             elif ":" in line and not line.startswith(" "):
                 colon_pos = line.index(":")
                 potential_title = line[:colon_pos].strip()
+                # <60 chars avoids matching full sentences with colons; no leading digit skips "1: ..."
                 if len(potential_title) < 60 and potential_title and not potential_title[0].isdigit():
                     rest = line[colon_pos + 1:].strip()
                     para = doc.add_paragraph(style="List Bullet")
@@ -805,7 +808,7 @@ class OutputBuilder:
             # Skip placeholder lines (NONE, N/A, etc.)
             if self._is_placeholder(line):
                 continue
-            # Skip markdown horizontal rules (---, ***, ___)
+            # Skip markdown horizontal rules (---, ***, ___) — 3+ chars per MD spec
             if set(line) <= {'-', '*', '_'} and len(line) >= 3:
                 continue
             # Detect experience title lines (e.g. "Title | Company | Date")
@@ -825,6 +828,7 @@ class OutputBuilder:
                 colon_pos = line.index(":")
                 potential_title = line[:colon_pos].strip()
                 # Project titles are typically short (under 60 chars) and don't start with bullets
+                # <60 chars avoids matching full sentences with colons; no leading digit skips "1: ..."
                 if len(potential_title) < 60 and potential_title and not potential_title[0].isdigit():
                     rest = line[colon_pos + 1:].strip()
                     pdf.set_font("Helvetica", "B", 10)

@@ -31,60 +31,56 @@ import subprocess
 
 def check_and_install_dependencies():
     """
-    Automatically install all required Python packages from requirements.txt
-    if they are not already present. This ensures the evaluator does not need
-    to manually run 'pip install -r requirements.txt' before running the project.
+    Automatically install all required Python packages if they are not
+    already present. The dependency list is defined here in code — no
+    external requirements.txt file is needed.
 
-    Reads requirements.txt from the same directory as main.py.
+    Each entry maps a pip install name to the Python import name used
+    to check whether the package is already available.
+
     Exits with an error if installation fails.
     """
-    # Path to requirements.txt (same directory as this script)
-    req_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
-
-    if not os.path.isfile(req_file):
-        return
-
-    # Read required packages
-    with open(req_file, "r") as f:
-        packages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-
-    if not packages:
-        return
+    # (pip install name, import name)
+    DEPENDENCIES = [
+        ("transformers>=4.40.0", "transformers"),
+        ("torch>=2.0.0",        "torch"),
+        ("accelerate>=0.26.0",  "accelerate"),
+        ("hf_xet>=1.0.0",       "hf_xet"),
+        ("pdfplumber>=0.11.0",  "pdfplumber"),
+        ("python-docx>=1.1.0",  "docx"),
+        ("fpdf2>=2.8.0",        "fpdf"),
+    ]
 
     # Check which packages are missing
+    print("\n  Checking dependencies...")
     missing = []
-    for pkg in packages:
-        # Extract package name without version specifier for import check
-        pkg_name = pkg.split(">=")[0].split("==")[0].split("!=")[0].strip()
-        # Map pip package names to importable module names
-        import_name_map = {
-            "python-docx": "docx",
-            "fpdf2": "fpdf",
-            "pdfplumber": "pdfplumber",
-            "transformers": "transformers",
-            "torch": "torch",
-            "accelerate": "accelerate"
-        }
-        import_name = import_name_map.get(pkg_name, pkg_name.replace("-", "_"))
+    for pip_name, import_name in DEPENDENCIES:
         try:
             __import__(import_name)
         except ImportError:
-            missing.append(pkg)
+            missing.append(pip_name)
 
     if not missing:
+        print("  All dependencies are available.")
         return
 
-    print(f"  Installing missing packages: {', '.join(missing)}")
+    print(f"\n  The following {len(missing)} package(s) are missing and will be installed:")
+    for pkg in missing:
+        print(f"    - {pkg}")
+
+    print(f"\n  Installing...")
     try:
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install"] + missing,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT
         )
-        print("  Dependencies installed successfully.")
-    except subprocess.CalledProcessError as e:
+        print("  All dependencies installed successfully.")
+    except subprocess.CalledProcessError:
         print(f"\n  ERROR: Failed to install dependencies automatically.")
-        print(f"  Please run manually: pip install -r requirements.txt")
+        print(f"  Please install manually:")
+        for pkg, _ in DEPENDENCIES:
+            print(f"    pip install {pkg}")
         sys.exit(1)
 
 
@@ -120,12 +116,13 @@ def _set_hf_offline_if_cached():
     models_to_check = [extraction_model, generation_model]
     all_cached = all(
         os.path.isdir(
+            # HF Hub stores cached models as "models--org--name" on disk
             os.path.join(cache_dir, "models--" + m.replace("/", "--"))
         )
         for m in models_to_check
     )
     if all_cached:
-        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")  # setdefault: don't override user's explicit setting
 
 _set_hf_offline_if_cached()
 
@@ -195,7 +192,7 @@ def get_resume_input(input_parser):
         # Retry loop: re-prompt until the user provides a valid file or exits
         while True:
             file_path = input("  Enter file path (provide full path if file is not in the current directory): ").strip()
-            file_path = file_path.strip("'\"")
+            file_path = file_path.strip("'\"")  # strip quotes from terminal drag-and-drop
             try:
                 return input_parser.read_file(file_path)
             except (FileNotFoundError, ValueError) as e:
@@ -251,7 +248,7 @@ def _validate_jd_input(raw_text, resume_text):
     """
     if not raw_text or not resume_text:
         return False
-    return _text_similarity(raw_text, resume_text) > 0.5
+    return _text_similarity(raw_text, resume_text) > 0.5  # >50% Jaccard = likely same document
 
 
 def get_job_description_input(input_parser, resume_text=None):
@@ -285,7 +282,7 @@ def get_job_description_input(input_parser, resume_text=None):
             # Retry loop: re-prompt until user provides a valid file or bails out
             while True:
                 file_path = input("  Enter file path (provide full path if file is not in the current directory): ").strip()
-                file_path = file_path.strip("'\"")
+                file_path = file_path.strip("'\"")  # strip quotes from terminal drag-and-drop
                 try:
                     raw_text = input_parser.read_file(file_path)
                     break
@@ -751,7 +748,7 @@ def verify_extracted_data(extractor, resume_data):
             # Skip empty sections
             if not value or value == {} or value == []:
                 continue
-            # Skip internal fields
+            # Skip internal metadata fields (e.g. _sections_summary)
             if key.startswith("_"):
                 continue
             label = _LABELS.get(key, key.replace("_", " ").title())
@@ -1166,6 +1163,7 @@ def run_pipeline(hf_token=None):
     pipeline_start = time.time()
 
     # Flush any stale GPU/MPS memory from previous interrupted runs
+    # Flush stale GPU/MPS memory from any previous interrupted run
     gc.collect()
     try:
         import torch
@@ -1174,7 +1172,7 @@ def run_pipeline(hf_token=None):
         elif torch.cuda.is_available():
             torch.cuda.empty_cache()
     except Exception:
-        pass
+        pass  # best-effort; torch may not be installed yet
 
     # =========================================================================
     # STEP 1: Project Setup — Initialize LLMs
@@ -1337,8 +1335,8 @@ def run_pipeline(hf_token=None):
 
     generated_files = []
 
-    if format_choice in ("2", "3"):
-        docx_filename = _resolve_filename(output_builder.output_dir, base_name, ".docx")
+    # Generate DOCX first: if PDF (fpdf2) fails, user still gets the DOCX
+    if format_choice in ("2", "3"):(output_builder.output_dir, base_name, ".docx")
         docx_path = output_builder.build_docx(
             final_cv_content, contact_info, docx_filename
         )

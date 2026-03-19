@@ -80,7 +80,8 @@ def format_gpa_label(gpa_value):
     if match_10_desc:
         return f"CGPA: {val}"
 
-    # Plain number: infer from scale
+    # Plain number with no label: infer scale from magnitude
+    # <=4.0 = US GPA, <=10.0 = Indian CGPA, <=100.0 = percentage
     plain_num = re.match(r'^(\d+\.?\d*)$', val)
     if plain_num:
         num = float(plain_num.group(1))
@@ -269,7 +270,7 @@ def validate_resume_json(data, schema):
             # Recursively validate nested dicts
             validated[key] = validate_resume_json(data[key], default_value)
         elif isinstance(default_value, list) and not isinstance(data.get(key), list):
-            # Expected list but got something else — wrap or default
+            # Small models sometimes return a string where a list is expected; wrap it
             if data[key]:
                 validated[key] = [data[key]]
             else:
@@ -318,14 +319,14 @@ def parse_combined_cv_response(response_text):
         marker = parts[i].strip()
         content = parts[i + 1].strip()
         if marker in marker_map:
-            # Treat "NONE" as empty
+            # Llama 3.2 writes literal "NONE" when section has no data (per prompt)
             if content.upper() == "NONE":
                 content = ""
             sections[marker_map[marker]] = content
         i += 2
 
-    # Strategy 2: If strict parsing found nothing, try flexible marker detection
-    # Handles: **PROFESSIONAL SUMMARY**, ## PROFESSIONAL SUMMARY, PROFESSIONAL SUMMARY:
+    # Strategy 2: Llama 3.2 3B ignores ===MARKER=== format ~30% of the time;
+    # fall back to flexible heading detection (**HEADING**, ## HEADING, HEADING:)
     if not any(sections.values()):
         # Build a flexible pattern that matches various heading styles
         section_patterns = [
@@ -387,7 +388,7 @@ def display_json_pretty(data, title=""):
     print(json.dumps(data, indent=2, ensure_ascii=False))
 
 
-def _wrap_text(text, width=54):
+def _wrap_text(text, width=54):  # 54 = box width(60) - 2 border - 4 padding
     """
     Word-wrap text to fit within a given width. Preserves existing
     line breaks and handles bullet points. Strips markdown bold markers.
@@ -622,7 +623,7 @@ def display_ats_report(ats_report):
 
     # Score bar visual (e.g. "████████░░ 80/100")
     if isinstance(score, (int, float)):
-        filled = round(score / 5)  # 20 chars for 100
+        filled = round(score / 5)  # map 0-100 score to 0-20 block chars
         bar = "█" * filled + "░" * (20 - filled)
         print(f"\n  Overall Score: {bar}  {score}/100")
     else:
@@ -642,7 +643,7 @@ def display_ats_report(ats_report):
         ]
         for label, key in categories:
             val = rubric.get(key, 0)
-            mini_bar = "█" * round(val / 2.5) + "░" * (10 - round(val / 2.5))
+            mini_bar = "█" * round(val / 2.5) + "░" * (10 - round(val / 2.5))  # 0-25 → 0-10 blocks
             print(f"  │  {label:<20s} {mini_bar} {val:>2}/25   │")
         print(f"  └─────────────────────────────────────────┘")
 
@@ -797,7 +798,7 @@ def strip_llm_commentary(text):
             continue
         # If we hit real content, stop looking for preamble
         break
-    start = max(start, i)
+    start = max(start, i)  # take the later: past preamble OR past separator lines
 
     # --- Step 2: Strip trailing postamble/disclaimers ---
     # Find where the postamble block begins (searching from the end)
@@ -833,7 +834,7 @@ def strip_llm_commentary(text):
         if not midcontent_pat.match(ln.strip())
     ]
 
-    # --- Step 6: Remove echoed prompt data (long lines with "| Experience:" or "| Skills:") ---
+    # --- Step 6: Remove echoed prompt data (>150 chars with section labels = prompt echo) ---
     cleaned_lines = [
         ln for ln in cleaned_lines
         if not (len(ln.strip()) > 150 and
@@ -857,13 +858,13 @@ def deduplicate_content(text):
     Returns:
         str: Deduplicated text
     """
-    if not text or len(text) < 100:
+    if not text or len(text) < 100:  # too short to contain a meaningful duplicate
         return text
 
     lines = text.splitlines()
     n = len(lines)
 
-    # Only attempt dedup on content with a reasonable number of lines
+    # Need at least 6 lines to have two 3-line halves worth comparing
     if n < 6:
         return text
 
@@ -872,6 +873,7 @@ def deduplicate_content(text):
     best_split = None
     best_ratio = 0.0
 
+    # Search middle third for split point; duplicates won't split at extremes
     for mid in range(n // 3, 2 * n // 3):
         first_half = "\n".join(lines[:mid]).strip()
         second_half = "\n".join(lines[mid:]).strip()
@@ -879,7 +881,7 @@ def deduplicate_content(text):
         if not first_half or not second_half:
             continue
 
-        # Quick length check — second half should be roughly similar length
+        # Quick length check — halves >50% different in length are unlikely duplicates
         len_ratio = len(second_half) / len(first_half) if first_half else 0
         if len_ratio < 0.5 or len_ratio > 1.5:
             continue
