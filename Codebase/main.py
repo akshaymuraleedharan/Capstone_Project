@@ -31,19 +31,15 @@ import subprocess
 
 def check_and_install_dependencies():
     """
-    Automatically install all required Python packages if they are not
-    already present. The dependency list is defined here in code — no
-    external requirements.txt file is needed.
+    Check for required Python packages and install missing ones with
+    user confirmation. PyTorch is handled separately since it requires
+    platform-specific installation (CPU, CUDA, MPS).
 
-    Each entry maps a pip install name to the Python import name used
-    to check whether the package is already available.
-
-    Exits with an error if installation fails.
+    Exits if the user declines installation or if installation fails.
     """
-    # (pip install name, import name)
+    # Platform-agnostic dependencies (safe to pip install directly)
     DEPENDENCIES = [
         ("transformers>=4.40.0", "transformers"),
-        ("torch>=2.0.0",        "torch"),
         ("accelerate>=0.26.0",  "accelerate"),
         ("hf_xet>=1.0.0",       "hf_xet"),
         ("pdfplumber>=0.11.0",  "pdfplumber"),
@@ -51,8 +47,28 @@ def check_and_install_dependencies():
         ("fpdf2>=2.8.0",        "fpdf"),
     ]
 
-    # Check which packages are missing
     print("\n  Checking dependencies...")
+
+    # --- Step 1: Check PyTorch separately ---
+    torch_installed = True
+    try:
+        __import__("torch")
+    except ImportError:
+        torch_installed = False
+
+    if not torch_installed:
+        print("\n  PyTorch is required but not installed.")
+        print("  PyTorch installation is platform-specific (CPU, CUDA, MPS).")
+        print("  Please install the correct version for your system:")
+        print("    https://pytorch.org/get-started/locally/")
+        print("\n  Example commands:")
+        print("    macOS (MPS):   pip install torch>=2.0.0")
+        print("    Linux (CUDA):  pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121")
+        print("    CPU only:      pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu")
+        print("\n  After installing PyTorch, run this program again.")
+        sys.exit(1)
+
+    # --- Step 2: Check remaining dependencies ---
     missing = []
     for pip_name, import_name in DEPENDENCIES:
         try:
@@ -64,9 +80,20 @@ def check_and_install_dependencies():
         print("  All dependencies are available.")
         return
 
-    print(f"\n  The following {len(missing)} package(s) are missing and will be installed:")
+    # --- Step 3: Show what will be installed and ask for confirmation ---
+    print(f"\n  The following {len(missing)} package(s) are missing:")
     for pkg in missing:
         print(f"    - {pkg}")
+
+    install_cmd = f"    {sys.executable} -m pip install {' '.join(missing)}"
+    print(f"\n  Command to run:")
+    print(install_cmd)
+
+    choice = input("\n  Install now? (y/n): ").strip().lower()
+    if choice != "y":
+        print("\n  These dependencies are required to run the pipeline.")
+        print("  Install them manually and run this program again.")
+        sys.exit(1)
 
     print(f"\n  Installing...")
     try:
@@ -77,10 +104,9 @@ def check_and_install_dependencies():
         )
         print("  All dependencies installed successfully.")
     except subprocess.CalledProcessError:
-        print(f"\n  ERROR: Failed to install dependencies automatically.")
+        print(f"\n  ERROR: Failed to install dependencies.")
         print(f"  Please install manually:")
-        for pkg, _ in DEPENDENCIES:
-            print(f"    pip install {pkg}")
+        print(install_cmd)
         sys.exit(1)
 
 
@@ -88,8 +114,8 @@ def check_and_install_dependencies():
 # Corporate / proxy SSL fix — MUST run before any import of 'transformers'.
 #
 # transformers 5.x reads HF_HUB_OFFLINE at import time, not at call time.
-# check_and_install_dependencies() does __import__("transformers") to verify
-# the package is installed, so the env var must be set before that call too.
+# check_and_install_dependencies() does __import__("transformers") to check
+# if the package is present, so the env var must be set before that call too.
 #
 # When both models are already cached locally, we set HF_HUB_OFFLINE=1 to
 # suppress all outbound Hub network calls.  This prevents SSL certificate
@@ -128,7 +154,7 @@ _set_hf_offline_if_cached()
 
 
 # =============================================================================
-# Auto-install dependencies BEFORE importing local modules
+# Check and install dependencies BEFORE importing local modules
 # (local modules import transformers/torch at load time, so they must exist first)
 # =============================================================================
 check_and_install_dependencies()
