@@ -566,68 +566,6 @@ class ResumeDataExtractor:
         return resume_data
 
     @staticmethod
-    def _recover_missing_contact_fields(resume_data, raw_text):
-        """
-        Recover contact fields (location, LinkedIn, GitHub) that the
-        extraction model missed. Small models reliably extract name,
-        email, and phone but often skip URLs and location.
-
-        Uses simple regex/keyword matching on the raw resume text —
-        no LLM call needed, so it's fast and deterministic.
-
-        Args:
-            resume_data (dict): Structured resume data (modified in place)
-            raw_text (str): Original raw resume text
-
-        Returns:
-            dict: Resume data with recovered contact fields
-        """
-        import re
-
-        contact = resume_data.get("contact", {})
-        if not isinstance(contact, dict):
-            contact = {}
-            resume_data["contact"] = contact
-
-        # --- LinkedIn ---
-        if not contact.get("linkedin"):
-            # Match linkedin.com URLs (with or without https://)
-            match = re.search(
-                r'(https?://)?(?:www\.)?linkedin\.com/in/[\w-]+',
-                raw_text, re.IGNORECASE
-            )
-            if match:
-                contact["linkedin"] = match.group(0)
-
-        # --- GitHub ---
-        if not contact.get("github"):
-            # Match github.com URLs (with or without https://)
-            match = re.search(
-                r'(https?://)?(?:www\.)?github\.com/[\w-]+',
-                raw_text, re.IGNORECASE
-            )
-            if match:
-                contact["github"] = match.group(0)
-
-        # --- Location ---
-        if not contact.get("location"):
-            # Common patterns: "Based in: City", "Location: City",
-            # "City, State, Country" after a label
-            for pattern in [
-                r'(?:Based in|Location|Address)\s*[:\-]\s*(.+)',
-            ]:
-                match = re.search(pattern, raw_text, re.IGNORECASE)
-                if match:
-                    location = match.group(1).strip().rstrip('|').strip()
-                    # Stop at newline or pipe
-                    location = location.split('\n')[0].strip()
-                    if location and len(location) < 100:  # reject regex over-matches
-                        contact["location"] = location
-                        break
-
-        resume_data["contact"] = contact
-        return resume_data
-
     @staticmethod
     def _infer_soft_skills(resume_data):
         """
@@ -1260,9 +1198,27 @@ class ResumeDataExtractor:
                 if location and len(location) < 100:
                     contact["location"] = location
 
+        # --- Name recovery ---
+        # If the extraction missed the name, try the first line of the resume.
+        # Resumes almost always start with the candidate's name.
+        if not resume_data.get("name", "").strip():
+            first_lines = [l.strip() for l in raw_text.strip().split("\n") if l.strip()]
+            if first_lines:
+                candidate_name = first_lines[0]
+                # Strip email/phone if on same line: "Jyoti Singh jyoti@email.com"
+                candidate_name = re.split(
+                    r'\s+[\w\.\+\-]+@[\w\.\-]+|[+]?\d[\d\s\-()]{7,}', candidate_name
+                )[0].strip()
+                # Sanity check: name should be 2-50 chars, no digits, no URLs
+                if (2 <= len(candidate_name) <= 50
+                        and not any(c.isdigit() for c in candidate_name)
+                        and '/' not in candidate_name
+                        and '@' not in candidate_name):
+                    resume_data["name"] = candidate_name
+
         return resume_data
 
-    def generate_follow_ups(self, resume_data, job_data=None):
+    def generate_follow_up_questions(self, resume_data, job_data=None):
         """
         Generate targeted follow-up questions based on gaps between the
         candidate's resume and the job requirements (if provided), or

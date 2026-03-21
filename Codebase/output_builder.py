@@ -126,14 +126,9 @@ class OutputBuilder:
         Returns:
             str: Full path to the generated DOCX file
         """
-        try:
-            from docx import Document
-            from docx.shared import Pt, Inches, RGBColor
-            from docx.enum.text import WD_ALIGN_PARAGRAPH
-        except ImportError:
-            print("ERROR: 'python-docx' package is not installed.")
-            print("Please install it with: pip install python-docx")
-            sys.exit(1)
+        from docx import Document
+        from docx.shared import Pt, Inches, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
 
         doc = Document()
 
@@ -233,12 +228,7 @@ class OutputBuilder:
         Returns:
             str: Full path to the generated PDF file
         """
-        try:
-            from fpdf import FPDF
-        except ImportError:
-            print("ERROR: 'fpdf2' package is not installed.")
-            print("Please install it with: pip install fpdf2")
-            sys.exit(1)
+        from fpdf import FPDF
 
         pdf = FPDF()
         pdf.add_page()

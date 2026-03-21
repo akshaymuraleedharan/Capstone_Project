@@ -14,8 +14,8 @@ Models Used (via HuggingFace Transformers - platform agnostic, no server require
 - Llama 3.2 3B (meta-llama/Llama-3.2-3B-Instruct): Content generation and rewriting tasks
 
 Usage:
-    python main.py
     python main.py --hf-token YOUR_HF_TOKEN
+    python main.py --hf-token YOUR_HF_TOKEN --install-deps
 """
 
 import argparse
@@ -31,12 +31,18 @@ import subprocess
 
 def check_and_install_dependencies():
     """
-    Check for required Python packages and install missing ones with
-    user confirmation. PyTorch is handled separately since it requires
-    platform-specific installation (CPU, CUDA, MPS).
+    Only runs when --install-deps is passed. Checks for missing Python
+    packages, prompts before installing, then restarts the program.
 
-    Exits if the user declines installation or if installation fails.
+    PyTorch is handled separately since it requires platform-specific
+    installation (CPU, CUDA, MPS).
+
+    Without --install-deps this function is never called and imports
+    fail naturally with a standard Python traceback.
     """
+    if "--install-deps" not in sys.argv:
+        return
+
     # Platform-agnostic dependencies (safe to pip install directly)
     DEPENDENCIES = [
         ("transformers>=4.40.0", "transformers"),
@@ -49,7 +55,7 @@ def check_and_install_dependencies():
 
     print("\n  Checking dependencies...")
 
-    # --- Step 1: Check PyTorch separately ---
+    # --- Check PyTorch separately (platform-specific) ---
     torch_installed = True
     try:
         import warnings
@@ -71,7 +77,7 @@ def check_and_install_dependencies():
         print("\n  After installing PyTorch, run this program again.")
         sys.exit(1)
 
-    # --- Step 2: Check remaining dependencies ---
+    # --- Check remaining dependencies ---
     missing = []
     for pip_name, import_name in DEPENDENCIES:
         try:
@@ -83,7 +89,7 @@ def check_and_install_dependencies():
         print("  All dependencies are available.")
         return
 
-    # --- Step 3: Show what will be installed and ask for confirmation ---
+    # --- Prompt and install ---
     print(f"\n  The following {len(missing)} package(s) are missing:")
     for pkg in missing:
         print(f"    - {pkg}")
@@ -117,16 +123,17 @@ def check_and_install_dependencies():
         sys.exit(1)
 
     print("\n  All dependencies installed successfully.")
-    print("  Please re-run the program for changes to take effect.")
-    sys.exit(0)
+    print("  Restarting program...\n")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
 # =============================================================================
 # Corporate / proxy SSL fix — MUST run before any import of 'transformers'.
 #
 # transformers 5.x reads HF_HUB_OFFLINE at import time, not at call time.
-# check_and_install_dependencies() does __import__("transformers") to check
-# if the package is present, so the env var must be set before that call too.
+# With --install-deps, check_and_install_dependencies() does
+# __import__("transformers") to check if the package is present, so the
+# env var must be set before that call too.
 #
 # When both models are already cached locally, we set HF_HUB_OFFLINE=1 to
 # suppress all outbound Hub network calls.  This prevents SSL certificate
@@ -165,8 +172,26 @@ _set_hf_offline_if_cached()
 
 
 # =============================================================================
-# Check and install dependencies BEFORE importing local modules
-# (local modules import transformers/torch at load time, so they must exist first)
+# Handle --help before local imports so it works even without dependencies
+# =============================================================================
+if "--help" in sys.argv or "-h" in sys.argv:
+    print("usage: python main.py [--hf-token TOKEN] [--install-deps]")
+    print()
+    print("CV Creation using LLMs - Automated resume builder (Capstone Project CS01)")
+    print()
+    print("options:")
+    print("  --hf-token TOKEN   HuggingFace access token for gated models (Llama 3.2).")
+    print("                     Can also be set via the HF_TOKEN environment variable.")
+    print("  --install-deps     Interactively install missing dependencies with")
+    print("                     confirmation. Without this flag, missing dependencies")
+    print("                     fail naturally on import.")
+    print("  -h, --help         Show this help message and exit.")
+    sys.exit(0)
+
+# =============================================================================
+# With --install-deps: check and install missing packages BEFORE importing
+# local modules (they import transformers/torch at load time).
+# Without --install-deps: this is a no-op — missing imports fail naturally.
 # =============================================================================
 check_and_install_dependencies()
 
@@ -188,10 +213,10 @@ from utils import (
 
 def parse_arguments():
     """
-    Parse command line arguments for HuggingFace authentication token.
+    Parse command line arguments.
 
     Returns:
-        argparse.Namespace: Parsed arguments with hf_token field
+        argparse.Namespace: Parsed arguments with hf_token and install_deps fields
     """
     parser = argparse.ArgumentParser(
         description="CV Creation using LLMs - Automated resume builder "
@@ -202,6 +227,12 @@ def parse_arguments():
         help="HuggingFace access token for gated models (Llama 3.2). "
              "Can also be set via the HF_TOKEN environment variable. "
              "Get a free token at: https://huggingface.co/settings/tokens"
+    )
+    parser.add_argument(
+        "--install-deps", action="store_true", default=False,
+        help="Interactively install missing dependencies with confirmation. "
+             "Without this flag, missing dependencies are reported and the "
+             "program exits."
     )
     return parser.parse_args()
 
@@ -874,7 +905,7 @@ def follow_up_round(extractor, resume_data, job_data=None):
     Returns:
         dict: Updated resume data with follow-up answers merged in
     """
-    follow_ups = extractor.generate_follow_ups(resume_data, job_data)
+    follow_ups = extractor.generate_follow_up_questions(resume_data, job_data)
 
     if not follow_ups:
         print("  No additional questions needed — profile looks complete.")
@@ -1015,22 +1046,26 @@ def revision_loop(cv_generator, cv_content, contact_info, resume_data,
     """
     # ── Phase 1: ATS Review (only when JD was provided) ──────────────
     if ats_report:
+        display_ats_report(ats_report)
         while True:
-            display_ats_report(ats_report)
-
             print("\n  Options:")
             print("  [1] Auto-optimize for missing ATS keywords")
             print("  [2] Re-score ATS compatibility")
-            print("  [3] Continue to CV review")
+            print("  [3] Preview generated CV")
+            print("  [4] Continue to CV review")
 
-            choice = get_user_choice("\n  Enter choice (1-3): ", ["1", "2", "3"])
+            choice = get_user_choice("\n  Enter choice (1-4): ", ["1", "2", "3", "4"])
 
             if choice == "1":
                 if ats_report.get("missing_keywords"):
                     cv_content = cv_generator.revise_for_keywords(
                         cv_content, ats_report["missing_keywords"]
                     )
-                    print("  CV updated. Consider re-scoring ATS (option 2).")
+                    print("  CV updated. Re-scoring ATS compatibility...")
+                    ats_report = cv_generator.score_ats_compatibility(
+                        cv_content, job_data, contact_info
+                    )
+                    display_ats_report(ats_report)
                 else:
                     print("  No missing keywords identified. Nothing to optimize.")
 
@@ -1038,9 +1073,12 @@ def revision_loop(cv_generator, cv_content, contact_info, resume_data,
                 ats_report = cv_generator.score_ats_compatibility(
                     cv_content, job_data, contact_info
                 )
-                print("  ATS re-scoring complete.")
+                display_ats_report(ats_report)
 
             elif choice == "3":
+                display_cv_preview(cv_content, contact_info)
+
+            elif choice == "4":
                 break
 
     # ── Phase 2: CV Review ───────────────────────────────────────────
@@ -1430,6 +1468,8 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n  Interrupted by user. Exiting.")
         sys.exit(0)
+    except ModuleNotFoundError:
+        raise  # Let missing dependencies show the default Python traceback
     except Exception as e:
         print(f"\n  ERROR: {e}")
         sys.exit(1)

@@ -65,17 +65,9 @@ class LLMHandler:
         Returns:
             bool: True if packages are available and model files are cached
 
-        Raises:
-            SystemExit: If packages are missing
         """
-        # Check transformers is installed
-        try:
-            import transformers
-            import torch
-        except ImportError as e:
-            print(f"\n  ERROR: Required package not found: {e}")
-            print("  Please install: pip install transformers torch accelerate")
-            sys.exit(1)
+        import transformers
+        import torch
 
         print("\n  AI models verified. Models will load on demand (one at a time).\n")
         return True

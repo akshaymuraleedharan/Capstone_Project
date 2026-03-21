@@ -349,17 +349,41 @@ class CVGenerator:
         cv_lower = cv_text.lower()
 
         # ---- 1. Keyword Match (0-25) ----
+        # Job parsers (especially small models) often produce compound phrases
+        # like "experience with machine learning algorithms: regression,
+        # classification". Matching the full phrase verbatim would always fail.
+        # Instead, split each phrase into meaningful terms and count the phrase
+        # as matched if >= 50% of its terms appear anywhere in the CV text.
+        _STOP_WORDS = {
+            "a", "an", "and", "or", "the", "of", "in", "on", "with", "for",
+            "to", "is", "are", "be", "at", "by", "from", "as", "into", "that",
+            "such", "like", "also", "been", "has", "have", "had", "e.g.",
+            "etc", "etc.", "related", "similar", "field", "considered",
+        }
+
+        def _keyword_matches(phrase, text):
+            """Check if a keyword phrase is sufficiently present in the text."""
+            # First try exact substring match (handles short phrases like "python")
+            if phrase in text:
+                return True
+            # Split into meaningful terms and check coverage
+            terms = [t for t in re.split(r'[\s,;:/()]+', phrase) if t and t not in _STOP_WORDS and len(t) > 1]
+            if not terms:
+                return False
+            hits = sum(1 for t in terms if t in text)
+            return hits / len(terms) >= 0.5
+
         required = [s.strip().lower() for s in job_data.get("required_skills", []) if s.strip()]
         preferred = [s.strip().lower() for s in job_data.get("preferred_skills", []) if s.strip()]
         all_keywords = list(dict.fromkeys(required + preferred))  # dedupe, keep order
 
-        matched = [kw for kw in all_keywords if kw in cv_lower]
-        missing = [kw for kw in all_keywords if kw not in cv_lower]
+        matched = [kw for kw in all_keywords if _keyword_matches(kw, cv_lower)]
+        missing = [kw for kw in all_keywords if not _keyword_matches(kw, cv_lower)]
 
         if all_keywords:
             # Required hits weighted 2x: ATS systems penalize missing "must-haves" harder
-            req_hits = sum(1 for kw in required if kw in cv_lower)
-            pref_hits = sum(1 for kw in preferred if kw in cv_lower)
+            req_hits = sum(1 for kw in required if _keyword_matches(kw, cv_lower))
+            pref_hits = sum(1 for kw in preferred if _keyword_matches(kw, cv_lower))
             weighted_hits = req_hits * 2 + pref_hits
             weighted_total = len(required) * 2 + len(preferred)
             keyword_pct = weighted_hits / weighted_total if weighted_total else 0
@@ -562,6 +586,9 @@ class CVGenerator:
             if section not in cv_content or not cv_content[section]:
                 continue
 
+            label = section.replace("_", " ").title()
+            print(f"    - Optimizing {label}...")
+
             current = cv_content[section]
             # Convert to string if needed
             if isinstance(current, (list, dict)):
@@ -575,7 +602,7 @@ class CVGenerator:
             revised = strip_llm_commentary(deduplicate_content(self.llm.generate(prompt).strip()))
             cv_content[section] = revised
 
-        print("  Auto-optimization complete.")
+        print("  ✓ Auto-optimization complete.")
         return cv_content
 
     def _build_job_context(self, job_data):

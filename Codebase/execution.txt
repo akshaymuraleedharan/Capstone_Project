@@ -1,1 +1,8 @@
+# Standard run
 python main.py --hf-token YOUR_HF_TOKEN_HERE
+
+# Run with prompted dependency installation (asks before installing each package)
+python main.py --hf-token YOUR_HF_TOKEN_HERE --install-deps
+
+# Show available options
+python main.py --help

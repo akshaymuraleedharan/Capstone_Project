@@ -68,12 +68,7 @@ class InputParser:
         Returns:
             str: Full text content concatenated from all pages
         """
-        try:
-            import pdfplumber
-        except ImportError:
-            print("ERROR: 'pdfplumber' package is not installed.")
-            print("Please install it with: pip install pdfplumber")
-            sys.exit(1)
+        import pdfplumber
 
         try:
             with pdfplumber.open(file_path) as pdf:
@@ -107,12 +102,7 @@ class InputParser:
         Returns:
             str: Full text content from paragraphs and tables
         """
-        try:
-            from docx import Document
-        except ImportError:
-            print("ERROR: 'python-docx' package is not installed.")
-            print("Please install it with: pip install python-docx")
-            sys.exit(1)
+        from docx import Document
 
         try:
             doc = Document(file_path)
