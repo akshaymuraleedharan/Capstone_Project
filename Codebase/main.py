@@ -62,9 +62,9 @@ def check_and_install_dependencies():
         print("  Please install the correct version for your system:")
         print("    https://pytorch.org/get-started/locally/")
         print("\n  Example commands:")
-        print("    macOS (MPS):   pip install torch>=2.0.0")
-        print("    Linux (CUDA):  pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cu121")
-        print("    CPU only:      pip install torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu")
+        print("    macOS (MPS):            pip install torch>=2.0.0")
+        print("    Windows/Linux (CUDA):   pip install torch>=2.0.0")
+        print("    Windows/Linux (CPU):    pip install torch>=2.0.0")
         print("\n  After installing PyTorch, run this program again.")
         sys.exit(1)
 
@@ -1362,7 +1362,8 @@ def run_pipeline(hf_token=None):
     generated_files = []
 
     # Generate DOCX first: if PDF (fpdf2) fails, user still gets the DOCX
-    if format_choice in ("2", "3"):(output_builder.output_dir, base_name, ".docx")
+    if format_choice in ("2", "3"):
+        docx_filename = _resolve_filename(output_builder.output_dir, base_name, ".docx")
         docx_path = output_builder.build_docx(
             final_cv_content, contact_info, docx_filename
         )
