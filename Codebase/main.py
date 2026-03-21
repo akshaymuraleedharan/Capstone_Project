@@ -52,7 +52,10 @@ def check_and_install_dependencies():
     # --- Step 1: Check PyTorch separately ---
     torch_installed = True
     try:
-        __import__("torch")
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            __import__("torch")
     except ImportError:
         torch_installed = False
 
@@ -62,9 +65,9 @@ def check_and_install_dependencies():
         print("  Please install the correct version for your system:")
         print("    https://pytorch.org/get-started/locally/")
         print("\n  Example commands:")
-        print("    macOS (MPS):            pip install torch>=2.0.0")
-        print("    Windows/Linux (CUDA):   pip install torch>=2.0.0")
-        print("    Windows/Linux (CPU):    pip install torch>=2.0.0")
+        print('    macOS (MPS):            pip install "torch>=2.0.0"')
+        print('    Windows/Linux (CUDA):   pip install "torch>=2.0.0"')
+        print('    Windows/Linux (CPU):    pip install "torch>=2.0.0"')
         print("\n  After installing PyTorch, run this program again.")
         sys.exit(1)
 
@@ -85,9 +88,7 @@ def check_and_install_dependencies():
     for pkg in missing:
         print(f"    - {pkg}")
 
-    install_cmd = f"    {sys.executable} -m pip install {' '.join(missing)}"
-    print(f"\n  Command to run:")
-    print(install_cmd)
+    print(f"\n  Command that will be run: pip install {' '.join(missing)}")
 
     choice = input("\n  Install now? (y/n): ").strip().lower()
     if choice != "y":
@@ -95,19 +96,29 @@ def check_and_install_dependencies():
         print("  Install them manually and run this program again.")
         sys.exit(1)
 
-    print(f"\n  Installing...")
-    try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install"] + missing,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.STDOUT
-        )
-        print("  All dependencies installed successfully.")
-    except subprocess.CalledProcessError:
-        print(f"\n  ERROR: Failed to install dependencies.")
-        print(f"  Please install manually:")
-        print(install_cmd)
+    print()
+    failed = []
+    for pkg in missing:
+        print(f"  Installing {pkg}...", end=" ", flush=True)
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", pkg],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT
+            )
+            print("done.")
+        except subprocess.CalledProcessError:
+            print("FAILED.")
+            failed.append(pkg)
+
+    if failed:
+        print(f"\n  ERROR: Failed to install: {', '.join(failed)}")
+        print(f"  Please install manually and run this program again.")
         sys.exit(1)
+
+    print("\n  All dependencies installed successfully.")
+    print("  Please re-run the program for changes to take effect.")
+    sys.exit(0)
 
 
 # =============================================================================
