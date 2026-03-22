@@ -4,5 +4,10 @@ python main.py --hf-token YOUR_HF_TOKEN_HERE
 # Run with prompted dependency installation (asks before installing each package)
 python main.py --hf-token YOUR_HF_TOKEN_HERE --install-deps
 
+# Alternative: set token as environment variable
+# macOS/Linux: export HF_TOKEN=YOUR_HF_TOKEN_HERE
+# Windows CMD: set HF_TOKEN=YOUR_HF_TOKEN_HERE
+python main.py
+
 # Show available options
 python main.py --help

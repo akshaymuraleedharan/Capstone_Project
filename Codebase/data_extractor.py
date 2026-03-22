@@ -566,7 +566,6 @@ class ResumeDataExtractor:
         return resume_data
 
     @staticmethod
-    @staticmethod
     def _infer_soft_skills(resume_data):
         """
         Infer soft skills from experience descriptions, achievements, and
